@@ -227,8 +227,21 @@ export default function App() {
                 <span
                   className="visibility-toggle"
                   role="checkbox"
+                  tabIndex={0}
                   aria-checked={isVisible}
+                  aria-label={`${isVisible ? "Hide" : "Show"} ${modelLabel(model)}`}
                   onClick={(event) => {
+                    event.stopPropagation();
+                    setVisible((current) => {
+                      const next = new Set(current);
+                      if (next.has(model.path)) next.delete(model.path);
+                      else next.add(model.path);
+                      return next;
+                    });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
                     event.stopPropagation();
                     setVisible((current) => {
                       const next = new Set(current);

@@ -25,6 +25,11 @@ interface RuntimeGroup {
   visibility: VisibilityRule[];
 }
 
+interface RuntimeModel {
+  object: THREE.Group;
+  path: string;
+}
+
 interface LoadProgress {
   geometryBuilt: number;
   geometryTotal: number;
@@ -174,6 +179,7 @@ export function Viewer(props: ViewerProps) {
     let textureSettled = 0;
     const resources: Array<{ dispose: () => void }> = [];
     const runtimeGroups: RuntimeGroup[] = [];
+    const runtimeModels: RuntimeModel[] = [];
     const litMaterials: Array<{ material: THREE.MeshStandardMaterial; base: number; lightLevel?: { min: number; max: number; dataref: string } }> = [];
 
     const fitCamera = () => {
@@ -206,18 +212,23 @@ export function Viewer(props: ViewerProps) {
         return pending;
       };
 
-      const visibleModels = props.aircraft.models.filter((model) => props.visiblePaths.has(model.path));
       setStats({ triangles: 0, drawCalls: 0 });
       setProgress({
         geometryBuilt: 0,
-        geometryTotal: visibleModels.length,
+        geometryTotal: props.aircraft.models.length,
         texturesLoaded: 0,
-        texturesTotal: visibleModels.length,
-        geometryReady: visibleModels.length === 0,
+        texturesTotal: props.aircraft.models.length,
+        geometryReady: props.aircraft.models.length === 0,
       });
 
-      for (const [modelIndex, model] of visibleModels.entries()) {
+      for (const [modelIndex, model] of props.aircraft.models.entries()) {
         const modelMaterials: THREE.MeshStandardMaterial[] = [];
+        const modelRoot = new THREE.Group();
+        modelRoot.name = model.name;
+        modelRoot.userData.modelPath = model.path;
+        modelRoot.visible = latest.current.visiblePaths.has(model.path);
+        root.add(modelRoot);
+        runtimeModels.push({ object: modelRoot, path: model.path });
         const textureTask = Promise.all([
           getTexture(model, model.texture, true),
           getTexture(model, model.textureLit, true),
@@ -237,7 +248,7 @@ export function Viewer(props: ViewerProps) {
             THREE.MathUtils.degToRad(attachment.rotation[1]),
             THREE.MathUtils.degToRad(attachment.rotation[2]),
           );
-          root.add(instance);
+          modelRoot.add(instance);
 
           const groups = new Map<number, THREE.Group>();
           for (const group of model.animations) {
@@ -387,6 +398,9 @@ export function Viewer(props: ViewerProps) {
 
     const animate = () => {
       const current = latest.current;
+      for (const model of runtimeModels) {
+        model.object.visible = current.visiblePaths.has(model.path);
+      }
       for (const group of runtimeGroups) {
         group.object.matrix.copy(animationMatrix(group.transforms, current.datarefs));
         group.object.visible = ruleVisible(group.visibility, current.datarefs);
@@ -418,7 +432,7 @@ export function Viewer(props: ViewerProps) {
       frameCameraRef.current = null;
       host.replaceChildren();
     };
-  }, [props.aircraft, props.visiblePaths, props.viewMode, props.lodDistance, props.wireframe, props.lightsEnabled]);
+  }, [props.aircraft, props.viewMode, props.lodDistance, props.wireframe, props.lightsEnabled]);
 
   return (
     <div className="viewer-shell">
