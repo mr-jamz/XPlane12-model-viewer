@@ -23,13 +23,25 @@ function firstVector(properties: Map<string, string>, patterns: RegExp[]): numbe
   return null;
 }
 
+function scalar(properties: Map<string, string>, keys: string[]): number | null {
+  for (const key of keys) {
+    const raw = properties.get(key);
+    if (raw === undefined) continue;
+    const value = Number(raw.trim().split(/\s+/)[0]);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
 export function parseAcf(path: string, source: string): AircraftManifest {
   const records = new Map<number, Map<string, string>>();
   const warnings: string[] = [];
 
   for (const rawLine of source.replace(/^\uFEFF/, "").split(/\r\n?|\n/)) {
     const line = rawLine.trim();
-    const match = line.match(/^(?:P\s+)?acf\/_obja\/(\d+)\/([^\s]+)\s*(.*)$/i);
+    // Plane Maker files are found with both `acf/_obja/...` and `_obja/...`
+    // record roots, depending on the X-Plane version that last saved them.
+    const match = line.match(/^(?:P\s+)?(?:acf\/)?_obja\/(\d+)\/([^\s]+)\s*(.*)$/i);
     if (!match) continue;
     const index = Number(match[1]);
     const properties = records.get(index) ?? new Map<string, string>();
@@ -39,21 +51,31 @@ export function parseAcf(path: string, source: string): AircraftManifest {
 
   const attachments: AircraftAttachment[] = [];
   for (const [index, properties] of [...records.entries()].sort(([a], [b]) => a - b)) {
-    const pathEntry = [...properties.entries()].find(([key]) => /(?:obj_path|file|path)$/.test(key));
+    const pathEntry = [...properties.entries()].find(([key, value]) =>
+      /(?:obj_path|file_stl|file|path)$/.test(key) && /\.obj(?:\s|$)/i.test(value)
+    );
     if (!pathEntry || !/\.obj(?:\s|$)/i.test(pathEntry[1])) continue;
 
-    const transform = firstVector(properties, [
+    // Some third-party exporters use a packed vector, but Plane Maker writes
+    // attachment position and orientation as individual scalar properties.
+    const packedTransform = firstVector(properties, [
       /_v10_att_file_stl$/,
       /_att_file_stl$/,
       /_position$/,
       /_xyz$/,
     ]);
-    const position: [number, number, number] = transform
-      ? [transform[0], transform[1], transform[2]]
-      : [0, 0, 0];
-    const rotation: [number, number, number] = transform && transform.length >= 6
-      ? [transform[3], transform[4], transform[5]]
-      : [0, 0, 0];
+    const position: [number, number, number] = [
+      scalar(properties, ["_v10_att_x_acf_prt_ref", "_att_x_acf_prt_ref"]) ?? packedTransform?.[0] ?? 0,
+      scalar(properties, ["_v10_att_y_acf_prt_ref", "_att_y_acf_prt_ref"]) ?? packedTransform?.[1] ?? 0,
+      scalar(properties, ["_v10_att_z_acf_prt_ref", "_att_z_acf_prt_ref"]) ?? packedTransform?.[2] ?? 0,
+    ];
+    // OBJ8 uses X right, Y up, Z aft. Plane Maker's theta (pitch) therefore
+    // rotates around X, psi (heading) around Y, and phi (roll) around Z.
+    const rotation: [number, number, number] = [
+      scalar(properties, ["_v10_att_the_ref", "_att_the_ref"]) ?? packedTransform?.[3] ?? 0,
+      scalar(properties, ["_v10_att_psi_ref", "_att_psi_ref"]) ?? packedTransform?.[4] ?? 0,
+      scalar(properties, ["_v10_att_phi_ref", "_att_phi_ref"]) ?? packedTransform?.[5] ?? 0,
+    ];
 
     attachments.push({
       index,

@@ -21,4 +21,27 @@ P acf/_obja/1/_lighting 2
     });
     expect(result.attachments[1].role).toBe("glass");
   });
+
+  it("reads Plane Maker scalar transforms and the unprefixed record root", () => {
+    const result = parseAcf("UH60.acf", `I
+1200 Version
+ACF
+P _obja/0/_v10_att_file_stl objects/rotors.obj
+P _obja/0/_v10_att_x_acf_prt_ref 1.25
+P _obja/0/_v10_att_y_acf_prt_ref 2.5
+P _obja/0/_v10_att_z_acf_prt_ref -3.75
+P _obja/0/_v10_att_phi_ref 10
+P _obja/0/_v10_att_psi_ref 20
+P _obja/0/_v10_att_the_ref 30
+P _obja/0/_lighting 0
+`);
+
+    expect(result.attachments).toHaveLength(1);
+    expect(result.attachments[0]).toMatchObject({
+      path: "objects/rotors.obj",
+      position: [1.25, 2.5, -3.75],
+      rotation: [30, 20, 10],
+      role: "exterior",
+    });
+  });
 });
