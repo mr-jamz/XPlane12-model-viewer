@@ -41,6 +41,8 @@ interface LoadProgress {
 function interpolation<T>(keys: Array<{ value: number } & T>, value: number): [{ value: number } & T, { value: number } & T, number] {
   const sorted = [...keys].sort((a, b) => a.value - b.value);
   if (sorted.length === 1) return [sorted[0], sorted[0], 0];
+  if (value <= sorted[0].value) return [sorted[0], sorted[0], 0];
+  if (value >= sorted.at(-1)!.value) return [sorted.at(-1)!, sorted.at(-1)!, 0];
   let left = sorted[0];
   let right = sorted[1];
   for (let i = 0; i < sorted.length - 1; i += 1) {
@@ -247,6 +249,10 @@ export function Viewer(props: ViewerProps) {
             THREE.MathUtils.degToRad(attachment.rotation[0]),
             THREE.MathUtils.degToRad(attachment.rotation[1]),
             THREE.MathUtils.degToRad(attachment.rotation[2]),
+            // Plane Maker applies heading, pitch, then roll to attached
+            // objects. Three's default XYZ order applies those in a
+            // different local-axis sequence once more than one is non-zero.
+            "YXZ",
           );
           modelRoot.add(instance);
 

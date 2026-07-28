@@ -45,4 +45,12 @@ describe("parseObj8", () => {
       dataref: "sim/flightmodel2/gear/deploy_ratio[0]",
     });
   });
+
+  it("reads the normal-map filename after an optional normal ratio", () => {
+    const model = parseObj8("objects/body.obj", source.replace(
+      "TEXTURE_NORMAL body_NML.png",
+      "TEXTURE_NORMAL 1.0 body_NML.png",
+    ));
+    expect(model.textureNormal).toBe("body_NML.png");
+  });
 });

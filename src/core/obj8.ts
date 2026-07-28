@@ -89,7 +89,12 @@ export function parseObj8(path: string, source: string): Obj8Model {
     }
     if (command === "TEXTURE" && parts[1] && parts[1].toLowerCase() !== "none") texture = parts.slice(1).join(" ");
     else if (command === "TEXTURE_LIT" && parts[1] && parts[1].toLowerCase() !== "none") textureLit = parts.slice(1).join(" ");
-    else if (command === "TEXTURE_NORMAL" && parts[1]) textureNormal = parts[1];
+    else if (command === "TEXTURE_NORMAL" && parts[1]) {
+      // OBJ8 accepts both `TEXTURE_NORMAL file` and
+      // `TEXTURE_NORMAL normal_ratio file`.
+      const firstIsRatio = Number.isFinite(Number(parts[1])) && parts.length >= 3;
+      textureNormal = parts.slice(firstIsRatio ? 2 : 1).join(" ");
+    }
     else if (command === "TEXTURE_MAP" && /^(normal|material_gloss|gloss)$/i.test(parts[1] ?? "")) {
       textureMaps[parts[1].toLowerCase() as keyof typeof textureMaps] = parts.slice(2).join(" ");
     } else if (command === "NORMAL_METALNESS") normalMetalness = true;

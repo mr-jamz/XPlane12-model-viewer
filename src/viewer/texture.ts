@@ -56,7 +56,11 @@ export async function loadTexture(
         },
       );
     });
-    texture.flipY = false;
+    // OBJ8 UVs use OpenGL's lower-left texture origin. Browser-decoded
+    // PNG/JPEG/TGA images have an upper-left origin and therefore need the
+    // WebGL upload flip. DDS data is already stored in GPU/OpenGL order and
+    // compressed textures cannot be flipped during upload.
+    texture.flipY = extension !== "dds";
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.anisotropy = 8;
