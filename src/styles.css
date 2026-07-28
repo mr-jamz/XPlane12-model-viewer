@@ -129,6 +129,7 @@ button { color: inherit; }
 .viewport-topbar { position: absolute; top: 17px; left: 17px; display: flex; align-items: center; gap: 8px; color: #a2b7b0; font: 500 9px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; pointer-events: none; }
 .viewport-stat { padding-left: 8px; margin-left: 2px; border-left: 1px solid var(--line); color: #6f857e; }
 .frame-button { position: absolute; right: 17px; bottom: 38px; background: rgba(10,25,21,.86); border: 1px solid var(--line); padding: 8px 10px; color: #a8bbb5; font-size: 10px; }
+.frame-button:disabled { cursor: wait; color: #60756e; opacity: .78; }
 .viewport-help { position: absolute; left: 17px; bottom: 16px; color: #60756e; font: 400 9px "DM Mono", monospace; pointer-events: none; }
 .view-switcher { position: absolute; z-index: 4; top: 14px; left: 50%; transform: translateX(-50%); display: flex; padding: 3px; background: rgba(7,17,15,.88); border: 1px solid var(--line); border-radius: 8px; backdrop-filter: blur(8px); }
 .view-switcher button { border: 0; border-radius: 5px; padding: 7px 11px; color: #788d86; background: transparent; cursor: pointer; font-size: 9px; font-weight: 600; }

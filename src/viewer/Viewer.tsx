@@ -25,6 +25,14 @@ interface RuntimeGroup {
   visibility: VisibilityRule[];
 }
 
+interface LoadProgress {
+  geometryBuilt: number;
+  geometryTotal: number;
+  texturesLoaded: number;
+  texturesTotal: number;
+  geometryReady: boolean;
+}
+
 function interpolation<T>(keys: Array<{ value: number } & T>, value: number): [{ value: number } & T, { value: number } & T, number] {
   const sorted = [...keys].sort((a, b) => a.value - b.value);
   if (sorted.length === 1) return [sorted[0], sorted[0], 0];
@@ -111,6 +119,13 @@ export function Viewer(props: ViewerProps) {
   const latest = useRef(props);
   const frameCameraRef = useRef<(() => void) | null>(null);
   const [stats, setStats] = useState({ triangles: 0, drawCalls: 0 });
+  const [progress, setProgress] = useState<LoadProgress>({
+    geometryBuilt: 0,
+    geometryTotal: 0,
+    texturesLoaded: 0,
+    texturesTotal: 0,
+    geometryReady: false,
+  });
   latest.current = props;
 
   useEffect(() => {
@@ -156,6 +171,7 @@ export function Viewer(props: ViewerProps) {
     let frame = 0;
     let triangleCount = 0;
     let drawCalls = 0;
+    let textureSettled = 0;
     const resources: Array<{ dispose: () => void }> = [];
     const runtimeGroups: RuntimeGroup[] = [];
     const litMaterials: Array<{ material: THREE.MeshStandardMaterial; base: number; lightLevel?: { min: number; max: number; dataref: string } }> = [];
@@ -190,18 +206,25 @@ export function Viewer(props: ViewerProps) {
         return pending;
       };
 
-      for (const model of props.aircraft.models) {
-        if (!props.visiblePaths.has(model.path)) continue;
-        const [map, emissiveMap, normalMap, xp12NormalMap, glossMap] = await Promise.all([
+      const visibleModels = props.aircraft.models.filter((model) => props.visiblePaths.has(model.path));
+      setStats({ triangles: 0, drawCalls: 0 });
+      setProgress({
+        geometryBuilt: 0,
+        geometryTotal: visibleModels.length,
+        texturesLoaded: 0,
+        texturesTotal: visibleModels.length,
+        geometryReady: visibleModels.length === 0,
+      });
+
+      for (const [modelIndex, model] of visibleModels.entries()) {
+        const modelMaterials: THREE.MeshStandardMaterial[] = [];
+        const textureTask = Promise.all([
           getTexture(model, model.texture, true),
           getTexture(model, model.textureLit, true),
           getTexture(model, model.textureNormal, false),
           getTexture(model, model.textureMaps.normal, false),
           getTexture(model, model.textureMaps.material_gloss ?? model.textureMaps.gloss, false),
         ]);
-        [map, emissiveMap, normalMap, xp12NormalMap, glossMap].forEach((texture) => {
-          if (texture && !resources.includes(texture)) resources.push(texture);
-        });
 
         for (const attachment of modelAttachments(props.aircraft, model)) {
           if (!attachmentVisible(attachment, props.viewMode)) continue;
@@ -235,15 +258,8 @@ export function Viewer(props: ViewerProps) {
             const shiny = Math.max(model.globalSpecular, state.shinyRatio);
             const material = new THREE.MeshStandardMaterial({
               color: new THREE.Color(...state.diffuse),
-              // X-Plane's LIT texture is an emissive input. Three.js multiplies
-              // emissiveMap by emissive color, so a present map needs a white base.
-              emissive: emissiveMap ? new THREE.Color(1, 1, 1) : new THREE.Color(...state.emissive),
-              emissiveMap,
+              emissive: new THREE.Color(...state.emissive),
               emissiveIntensity: props.night,
-              map,
-              normalMap: xp12NormalMap ?? normalMap,
-              roughnessMap: glossMap,
-              metalnessMap: model.normalMetalness ? (normalMap ?? glossMap) : null,
               roughness: Math.max(0.05, 1 - shiny),
               metalness: model.normalMetalness ? 0.55 : 0,
               side: state.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
@@ -255,7 +271,7 @@ export function Viewer(props: ViewerProps) {
               depthTest: state.depthTest,
               wireframe: props.wireframe,
             });
-            if (glossMap) {
+            if (model.textureMaps.material_gloss || model.textureMaps.gloss) {
               material.onBeforeCompile = (shader) => {
                 shader.fragmentShader = shader.fragmentShader.replace(
                   "roughnessFactor *= texelRoughness.g;",
@@ -267,6 +283,7 @@ export function Viewer(props: ViewerProps) {
             material.normalScale.set(1, -1);
             material.userData.modelPath = model.path;
             resources.push(material);
+            modelMaterials.push(material);
             litMaterials.push({ material, base: model.luminance ? Math.max(0.1, model.luminance / 1000) : 1, lightLevel: state.lightLevel });
 
             const mesh = new THREE.Mesh(geometry, material);
@@ -297,9 +314,44 @@ export function Viewer(props: ViewerProps) {
             }
           }
         }
+
+        // Geometry is usable immediately. Texture hydration continues in the
+        // background and cannot block the next OBJ8 object from being assembled.
+        void textureTask.then(([map, emissiveMap, normalMap, xp12NormalMap, glossMap]) => {
+          const textures = [map, emissiveMap, normalMap, xp12NormalMap, glossMap];
+          if (disposed) {
+            textures.forEach((texture) => texture?.dispose());
+            return;
+          }
+          textures.forEach((texture) => {
+            if (texture && !resources.includes(texture)) resources.push(texture);
+          });
+          for (const material of modelMaterials) {
+            material.map = map;
+            material.emissiveMap = emissiveMap;
+            if (emissiveMap) material.emissive.setRGB(1, 1, 1);
+            material.normalMap = xp12NormalMap ?? normalMap;
+            material.roughnessMap = glossMap;
+            material.metalnessMap = model.normalMetalness ? (normalMap ?? glossMap) : null;
+            material.needsUpdate = true;
+          }
+        }).finally(() => {
+          if (disposed) return;
+          textureSettled += 1;
+          setProgress((current) => ({ ...current, texturesLoaded: textureSettled }));
+        });
+
+        if (!disposed) {
+          setStats({ triangles: triangleCount, drawCalls });
+          setProgress((current) => ({ ...current, geometryBuilt: modelIndex + 1 }));
+        }
+        // Yield once per object so large aircraft show honest incremental stats
+        // and the UI remains responsive while geometry is constructed.
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       }
       if (!disposed) {
         setStats({ triangles: triangleCount, drawCalls });
+        setProgress((current) => ({ ...current, geometryReady: true }));
         fitCamera();
       }
     };
@@ -376,8 +428,22 @@ export function Viewer(props: ViewerProps) {
         <span>OBJ8 render</span>
         <span className="viewport-stat">{stats.triangles.toLocaleString()} tris</span>
         <span className="viewport-stat">{stats.drawCalls.toLocaleString()} batches</span>
+        {!progress.geometryReady && (
+          <span className="viewport-stat">building {progress.geometryBuilt}/{progress.geometryTotal}</span>
+        )}
+        {progress.geometryReady && progress.texturesLoaded < progress.texturesTotal && (
+          <span className="viewport-stat">textures {progress.texturesLoaded}/{progress.texturesTotal}</span>
+        )}
       </div>
-      <button className="frame-button" type="button" onClick={() => frameCameraRef.current?.()}>Frame aircraft</button>
+      <button
+        className="frame-button"
+        type="button"
+        disabled={!progress.geometryReady}
+        title={progress.geometryReady ? "Frame the complete aircraft" : "Waiting for all aircraft geometry"}
+        onClick={() => frameCameraRef.current?.()}
+      >
+        {progress.geometryReady ? "Frame aircraft" : `Building ${progress.geometryBuilt}/${progress.geometryTotal}`}
+      </button>
       <div className="viewport-help">Left drag orbit · wheel zoom · right drag pan · click part to inspect</div>
     </div>
   );
