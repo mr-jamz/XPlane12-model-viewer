@@ -1,1 +1,7 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/core/acf.test.ts","./src/core/acf.ts","./src/core/files.ts","./src/core/obj8.test.ts","./src/core/obj8.ts","./src/core/path.ts","./src/core/types.ts","./src/viewer/Viewer.test.ts","./src/viewer/Viewer.tsx","./src/viewer/texture.ts"],"version":"5.7.3"}
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  base: '/XPlane12-model-viewer/',
+})
