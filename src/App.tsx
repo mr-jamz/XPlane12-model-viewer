@@ -152,11 +152,13 @@ export default function App() {
       const loaded = await loadAircraft(sources);
       setAircraft(loaded);
       setVisible(new Set(loaded.models.map((model) => model.path)));
-      const ranges = datarefRanges(loaded);
-      setDatarefs(Object.fromEntries([...ranges].map(([name, range]) => [
-        name,
-        loaded.defaultDatarefs[name] ?? Math.max(range.min, Math.min(0, range.max)),
-      ])));
+      // Only persisted aircraft configuration values are explicit at load
+      // time. Simulator and plugin-driven datarefs are unavailable in a
+      // static browser viewer and must remain absent so Viewer can preserve
+      // each OBJ8 group's authored (identity) transform. Pre-filling every
+      // discovered dataref with zero posed unrelated rotor, door, cockpit,
+      // and equipment groups into their numeric-zero animation states.
+      setDatarefs({ ...loaded.defaultDatarefs });
       setSelectedPath(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The aircraft could not be loaded.");
@@ -355,7 +357,7 @@ export default function App() {
             {[...ranges].map(([name, range]) => {
               const span = range.max - range.min;
               const step = span > 20 ? span / 200 : span > 2 ? 0.1 : 0.01;
-              const value = datarefs[name] ?? range.min;
+              const value = datarefs[name] ?? Math.max(range.min, Math.min(0, range.max));
               return (
                 <label className="dataref-control" key={name}>
                   <span className="dataref-name">{name}</span>
