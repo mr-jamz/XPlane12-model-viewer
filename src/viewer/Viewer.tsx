@@ -55,10 +55,20 @@ function interpolation<T>(keys: Array<{ value: number } & T>, value: number): [{
   return [left, right, span === 0 ? 0 : (value - left.value) / span];
 }
 
-function animationMatrix(transforms: AnimationTransform[], datarefs: Record<string, number>): THREE.Matrix4 {
+export function animationMatrix(transforms: AnimationTransform[], datarefs: Record<string, number>): THREE.Matrix4 {
   const result = new THREE.Matrix4();
   for (const transform of transforms) {
-    const value = datarefs[transform.dataref] ?? 0;
+    // `none` is OBJ8's constant-transform sentinel and must still be applied
+    // (it is commonly used for the translate/rotate/translate-back pivot
+    // pattern). Custom datarefs, however, may be created and initialized by an
+    // aircraft plugin that cannot run in this static viewer. Treating every
+    // unavailable dataref as zero actively folds, opens, or displaces authored
+    // geometry. Leave those transforms at identity until the user supplies an
+    // explicit value through the dataref controls.
+    const isConstant = !transform.dataref || transform.dataref.toLowerCase() === "none";
+    const explicitValue = Object.prototype.hasOwnProperty.call(datarefs, transform.dataref);
+    if (!isConstant && !explicitValue) continue;
+    const value = isConstant ? 0 : datarefs[transform.dataref];
     if (transform.type === "rotate") {
       const [a, b, t] = interpolation(transform.keys, value);
       const angle = THREE.MathUtils.lerp(a.angle, b.angle, t);
@@ -75,7 +85,10 @@ function animationMatrix(transforms: AnimationTransform[], datarefs: Record<stri
 
 function ruleVisible(rules: VisibilityRule[], datarefs: Record<string, number>): boolean {
   return rules.every((rule) => {
-    const value = datarefs[rule.dataref] ?? 0;
+    // Missing plugin-owned datarefs have no trustworthy value. Keep the
+    // authored geometry visible until the user explicitly drives the rule.
+    if (!Object.prototype.hasOwnProperty.call(datarefs, rule.dataref)) return true;
+    const value = datarefs[rule.dataref];
     const inRange = value >= Math.min(rule.min, rule.max) && value <= Math.max(rule.min, rule.max);
     return rule.mode === "show" ? inRange : !inRange;
   });
