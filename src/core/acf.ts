@@ -83,6 +83,7 @@ export function parseAcf(path: string, source: string): AircraftManifest {
       role: roleFromProperties(properties),
       position,
       rotation,
+      hideDataref: properties.get("_obj_hide_dataref") || undefined,
     });
   }
 

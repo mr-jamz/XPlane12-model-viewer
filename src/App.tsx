@@ -48,6 +48,9 @@ function datarefRanges(aircraft: LoadedAircraft): Map<string, DatarefRange> {
       if (level) add(level.dataref, [level.min, level.max]);
     }
   }
+  for (const attachment of aircraft.manifest.attachments) {
+    if (attachment.hideDataref) add(attachment.hideDataref, [0, 1]);
+  }
   return ranges;
 }
 
@@ -150,7 +153,10 @@ export default function App() {
       setAircraft(loaded);
       setVisible(new Set(loaded.models.map((model) => model.path)));
       const ranges = datarefRanges(loaded);
-      setDatarefs(Object.fromEntries([...ranges].map(([name, range]) => [name, Math.max(range.min, Math.min(0, range.max))])));
+      setDatarefs(Object.fromEntries([...ranges].map(([name, range]) => [
+        name,
+        loaded.defaultDatarefs[name] ?? Math.max(range.min, Math.min(0, range.max)),
+      ])));
       setSelectedPath(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The aircraft could not be loaded.");

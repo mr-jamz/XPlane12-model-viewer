@@ -104,6 +104,22 @@ function guessedRole(path: string): AircraftAttachment["role"] {
   return "exterior";
 }
 
+export function parseOptionDefaults(source: string, prefixes: string[]): Record<string, number> {
+  const options = new Map<string, number>();
+  for (const rawLine of source.replace(/^\uFEFF/, "").split(/\r\n?|\n/)) {
+    const match = rawLine.trim().match(/^([a-z0-9_]+)\s*=\s*(-?(?:\d+\.?\d*|\.\d+))\s*$/i);
+    if (!match) continue;
+    const value = Number(match[2]);
+    if (Number.isFinite(value)) options.set(match[1].toLowerCase(), value);
+  }
+
+  const result: Record<string, number> = {};
+  for (const prefix of prefixes) {
+    for (const [name, value] of options) result[`${prefix}/conf/${name}`] = value;
+  }
+  return result;
+}
+
 export async function loadAircraft(inputFiles: SourceFile[]): Promise<LoadedAircraft> {
   const files = inputFiles.filter(({ path }) => !/(^|\/)\./.test(path));
   const fileMap = new Map(files.map(({ path, file }) => [normalizePath(path).toLowerCase(), file]));
@@ -126,11 +142,39 @@ export async function loadAircraft(inputFiles: SourceFile[]): Promise<LoadedAirc
     }));
   }
 
+  // Third-party aircraft plugins commonly persist their selected airframe
+  // configuration in opt_config.ini. The browser cannot execute an XPL plugin,
+  // but it can reproduce those saved configuration datarefs.
+  const datarefPrefixes = [...new Set(manifest.attachments
+    .map(({ hideDataref }) => hideDataref?.match(/^(.+?)\/kill\//i)?.[1])
+    .filter((value): value is string => Boolean(value)))];
+  const optionSource = files.find(({ path }) => /(^|\/)opt_config\.ini$/i.test(path));
+  const defaultDatarefs = optionSource
+    ? parseOptionDefaults(await optionSource.file.text(), datarefPrefixes)
+    : {};
+
+  if (optionSource) {
+    const options = new Map(Object.entries(defaultDatarefs).map(([name, value]) => [
+      name.slice(name.lastIndexOf("/") + 1).toLowerCase(),
+      value,
+    ]));
+    for (const attachment of manifest.attachments) {
+      if (!attachment.hideDataref) continue;
+      const name = attachment.hideDataref.slice(attachment.hideDataref.lastIndexOf("/") + 1).toLowerCase();
+      const optionName = name === "ramp" ? "cargo" : name;
+      const selected = options.get(optionName);
+      if (selected !== undefined && (selected === 0 || selected === 1)) {
+        defaultDatarefs[attachment.hideDataref] = selected === 0 ? 1 : 0;
+      }
+    }
+  }
+
   return {
     name: manifest.name,
     files,
     models,
     manifest,
     fileMap,
+    defaultDatarefs,
   };
 }

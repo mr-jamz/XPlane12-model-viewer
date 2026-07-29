@@ -99,6 +99,7 @@ export interface AircraftAttachment {
   role: AttachmentRole;
   position: Vec3;
   rotation: Vec3;
+  hideDataref?: string;
 }
 
 export interface AircraftManifest {
@@ -114,4 +115,5 @@ export interface LoadedAircraft {
   models: Obj8Model[];
   manifest: AircraftManifest;
   fileMap: Map<string, File>;
+  defaultDatarefs: Record<string, number>;
 }

@@ -30,6 +30,11 @@ interface RuntimeModel {
   path: string;
 }
 
+interface RuntimeAttachment {
+  object: THREE.Group;
+  hideDataref?: string;
+}
+
 interface LoadProgress {
   geometryBuilt: number;
   geometryTotal: number;
@@ -198,6 +203,7 @@ export function Viewer(props: ViewerProps) {
     const resources: Array<{ dispose: () => void }> = [];
     const runtimeGroups: RuntimeGroup[] = [];
     const runtimeModels: RuntimeModel[] = [];
+    const runtimeAttachments: RuntimeAttachment[] = [];
     const litMaterials: Array<{ material: THREE.MeshStandardMaterial; base: number; lightLevel?: { min: number; max: number; dataref: string } }> = [];
 
     const fitCamera = () => {
@@ -271,6 +277,7 @@ export function Viewer(props: ViewerProps) {
             "YXZ",
           );
           modelRoot.add(instance);
+          runtimeAttachments.push({ object: instance, hideDataref: attachment.hideDataref });
 
           const groups = new Map<number, THREE.Group>();
           for (const group of model.animations) {
@@ -427,6 +434,10 @@ export function Viewer(props: ViewerProps) {
         group.object.matrix.copy(animationMatrix(group.transforms, current.datarefs));
         group.object.visible = ruleVisible(group.visibility, current.datarefs);
         group.object.matrixWorldNeedsUpdate = true;
+      }
+      for (const attachment of runtimeAttachments) {
+        attachment.object.visible = !attachment.hideDataref
+          || (current.datarefs[attachment.hideDataref] ?? 0) < 0.5;
       }
       for (const entry of litMaterials) {
         let level = current.night;

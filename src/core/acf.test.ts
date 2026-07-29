@@ -31,6 +31,7 @@ P _obja/0/_v10_att_x_acf_prt_ref 1.25
 P _obja/0/_v10_att_y_acf_prt_ref 2.5
 P _obja/0/_v10_att_z_acf_prt_ref -3.75
 P _obja/0/_v10_att_phi_ref 10
+P _obja/0/_obj_hide_dataref uh60m/kill/rotors
 P _obja/0/_v10_att_psi_ref 20
 P _obja/0/_v10_att_the_ref 30
 P _obja/0/_lighting 0
@@ -41,6 +42,7 @@ P _obja/0/_lighting 0
       path: "objects/rotors.obj",
       position: [1.25, 2.5, -3.75],
       rotation: [30, 20, 10],
+      hideDataref: "uh60m/kill/rotors",
       role: "exterior",
     });
   });
