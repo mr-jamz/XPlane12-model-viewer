@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { animationMatrix } from "./Viewer";
-import type { AnimationTransform } from "../core/types";
+import { animationMatrix, ruleVisible } from "./Viewer";
+import type { AnimationTransform, VisibilityRule } from "../core/types";
 
 describe("animationMatrix", () => {
   it("keeps plugin-driven aircraft parts at their authored coordinates until a dataref is explicit", () => {
@@ -32,5 +32,26 @@ describe("animationMatrix", () => {
     expect(elements[12]).toBeCloseTo(0);
     expect(elements[13]).toBeCloseTo(2.5);
     expect(elements[14]).toBeCloseTo(4.5);
+  });
+});
+
+describe("ruleVisible", () => {
+  it("uses the neutral numeric state for missing datarefs instead of drawing every configuration branch", () => {
+    const unfolded: VisibilityRule[] = [{
+      mode: "show",
+      min: 0,
+      max: 0,
+      dataref: "uh60m/rotor/folded",
+    }];
+    const folded: VisibilityRule[] = [{
+      mode: "show",
+      min: 1,
+      max: 1,
+      dataref: "uh60m/rotor/folded",
+    }];
+
+    expect(ruleVisible(unfolded, {})).toBe(true);
+    expect(ruleVisible(folded, {})).toBe(false);
+    expect(ruleVisible(folded, { "uh60m/rotor/folded": 1 })).toBe(true);
   });
 });

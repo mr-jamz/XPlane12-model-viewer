@@ -83,12 +83,15 @@ export function animationMatrix(transforms: AnimationTransform[], datarefs: Reco
   return result;
 }
 
-function ruleVisible(rules: VisibilityRule[], datarefs: Record<string, number>): boolean {
+export function ruleVisible(rules: VisibilityRule[], datarefs: Record<string, number>): boolean {
   return rules.every((rule) => {
-    // Missing plugin-owned datarefs have no trustworthy value. Keep the
-    // authored geometry visible until the user explicitly drives the rule.
-    if (!Object.prototype.hasOwnProperty.call(datarefs, rule.dataref)) return true;
-    const value = datarefs[rule.dataref];
+    // A missing plugin-owned dataref must not make every mutually-exclusive
+    // SHOW/HIDE branch visible. X-Plane datarefs initialize numerically, so use
+    // zero only for visibility selection. Animation transforms deliberately
+    // keep their separate identity fallback until an explicit value exists.
+    const value = Object.prototype.hasOwnProperty.call(datarefs, rule.dataref)
+      ? datarefs[rule.dataref]
+      : 0;
     const inRange = value >= Math.min(rule.min, rule.max) && value <= Math.max(rule.min, rule.max);
     return rule.mode === "show" ? inRange : !inRange;
   });
