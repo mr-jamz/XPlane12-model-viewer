@@ -16,6 +16,7 @@ interface ViewerProps {
   lodDistance: number;
   wireframe: boolean;
   lightsEnabled: boolean;
+  unlit: boolean;
   onSelect: (path: string | null) => void;
 }
 
@@ -33,6 +34,12 @@ interface RuntimeModel {
 interface RuntimeAttachment {
   object: THREE.Group;
   hideDataref?: string;
+}
+
+interface RuntimeMesh {
+  mesh: THREE.Mesh;
+  lit: THREE.MeshStandardMaterial;
+  unlit: THREE.MeshBasicMaterial;
 }
 
 interface LoadProgress {
@@ -204,6 +211,7 @@ export function Viewer(props: ViewerProps) {
     const runtimeGroups: RuntimeGroup[] = [];
     const runtimeModels: RuntimeModel[] = [];
     const runtimeAttachments: RuntimeAttachment[] = [];
+    const runtimeMeshes: RuntimeMesh[] = [];
     const litMaterials: Array<{ material: THREE.MeshStandardMaterial; base: number; lightLevel?: { min: number; max: number; dataref: string } }> = [];
 
     const fitCamera = () => {
@@ -247,6 +255,7 @@ export function Viewer(props: ViewerProps) {
 
       for (const [modelIndex, model] of props.aircraft.models.entries()) {
         const modelMaterials: THREE.MeshStandardMaterial[] = [];
+        const modelUnlitMaterials: THREE.MeshBasicMaterial[] = [];
         const modelRoot = new THREE.Group();
         modelRoot.name = model.name;
         modelRoot.userData.modelPath = model.path;
@@ -311,6 +320,15 @@ export function Viewer(props: ViewerProps) {
               depthTest: state.depthTest,
               wireframe: props.wireframe,
             });
+            const unlitMaterial = new THREE.MeshBasicMaterial({
+              color: new THREE.Color(...state.diffuse),
+              side: state.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+              transparent: state.blend !== "test",
+              alphaTest: state.blend === "test" ? state.alphaCutoff : 0,
+              depthWrite: attachment.role !== "glass",
+              depthTest: state.depthTest,
+              wireframe: props.wireframe,
+            });
             if (model.textureMaps.material_gloss || model.textureMaps.gloss) {
               material.onBeforeCompile = (shader) => {
                 shader.fragmentShader = shader.fragmentShader.replace(
@@ -322,16 +340,20 @@ export function Viewer(props: ViewerProps) {
             }
             material.normalScale.set(1, -1);
             material.userData.modelPath = model.path;
+            unlitMaterial.userData.modelPath = model.path;
             resources.push(material);
+            resources.push(unlitMaterial);
             modelMaterials.push(material);
+            modelUnlitMaterials.push(unlitMaterial);
             litMaterials.push({ material, base: model.luminance ? Math.max(0.1, model.luminance / 1000) : 1, lightLevel: state.lightLevel });
 
-            const mesh = new THREE.Mesh(geometry, material);
+            const mesh = new THREE.Mesh(geometry, latest.current.unlit ? unlitMaterial : material);
             mesh.name = model.name;
             mesh.userData.modelPath = model.path;
             mesh.castShadow = attachment.role !== "glass";
             mesh.receiveShadow = attachment.role !== "glass";
             mesh.renderOrder = attachment.role === "glass" ? 1000 + attachment.index : batch.line;
+            runtimeMeshes.push({ mesh, lit: material, unlit: unlitMaterial });
             groups.get(batch.animationPath.at(-1) ?? 0)?.add(mesh);
             triangleCount += Math.floor(batch.indices.length / 3);
             drawCalls += 1;
@@ -373,6 +395,10 @@ export function Viewer(props: ViewerProps) {
             material.normalMap = xp12NormalMap ?? normalMap;
             material.roughnessMap = glossMap;
             material.metalnessMap = model.normalMetalness ? (normalMap ?? glossMap) : null;
+            material.needsUpdate = true;
+          }
+          for (const material of modelUnlitMaterials) {
+            material.map = map;
             material.needsUpdate = true;
           }
         }).finally(() => {
@@ -438,6 +464,11 @@ export function Viewer(props: ViewerProps) {
       for (const attachment of runtimeAttachments) {
         attachment.object.visible = !attachment.hideDataref
           || (current.datarefs[attachment.hideDataref] ?? 0) < 0.5;
+      }
+      for (const entry of runtimeMeshes) {
+        entry.mesh.material = current.unlit ? entry.unlit : entry.lit;
+        entry.mesh.castShadow = !current.unlit;
+        entry.mesh.receiveShadow = !current.unlit;
       }
       for (const entry of litMaterials) {
         let level = current.night;

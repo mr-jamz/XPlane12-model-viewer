@@ -142,6 +142,7 @@ export default function App() {
   const [lodDistance, setLodDistance] = useState(0);
   const [wireframe, setWireframe] = useState(false);
   const [lightsEnabled, setLightsEnabled] = useState(true);
+  const [unlit, setUnlit] = useState(true);
   const [rightTab, setRightTab] = useState<"scene" | "datarefs">("scene");
   const [dragging, setDragging] = useState(false);
 
@@ -159,6 +160,7 @@ export default function App() {
       // discovered dataref with zero posed unrelated rotor, door, cockpit,
       // and equipment groups into their numeric-zero animation states.
       setDatarefs({ ...loaded.defaultDatarefs });
+      setUnlit(true);
       setSelectedPath(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The aircraft could not be loaded.");
@@ -290,6 +292,7 @@ export default function App() {
           lodDistance={lodDistance}
           wireframe={wireframe}
           lightsEnabled={lightsEnabled}
+          unlit={unlit}
           onSelect={setSelectedPath}
         />
       </section>
@@ -304,9 +307,11 @@ export default function App() {
           <div className="inspector-scroll">
             <section className="control-section">
               <p className="eyebrow">LIGHTING</p>
+              <label className="toggle-row"><span><strong>Flat / unlit textures</strong><small>Display texture colors without scene lighting</small></span><input type="checkbox" checked={unlit} onChange={(event) => setUnlit(event.target.checked)} /><i /></label>
               <div className="range-label"><Sun size={16} /><span>Day / night mix</span><Moon size={15} /></div>
-              <input className="range" type="range" min="0" max="1" step="0.01" value={night} onChange={(event) => setNight(Number(event.target.value))} />
+              <input className="range" type="range" min="0" max="1" step="0.01" value={night} disabled={unlit} onChange={(event) => setNight(Number(event.target.value))} />
               <div className="range-scale"><span>Day</span><strong>{Math.round(night * 100)}%</strong><span>Night</span></div>
+              {unlit && <p className="field-help">Day/night lighting is available in Lit mode.</p>}
             </section>
             <section className="control-section">
               <p className="eyebrow">LEVEL OF DETAIL</p>
